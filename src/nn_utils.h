@@ -7,6 +7,9 @@
 
 namespace nn {
 
+using Matrix = std::vector<std::vector<double>>;
+using Vector = std::vector<double>;
+
 // Sigmoid activation function and its derivative
 inline double sigmoid(double x) {
     if (x >= 0) {
@@ -22,6 +25,27 @@ inline double sigmoid_derivative(double s) {
     return s * (1.0 - s);
 }
 
+inline Vector softmax(const Vector& logits) {
+    Vector probabilities(logits.size(), 0.0);
+    if (logits.empty()) return probabilities;
+
+    double max_logit = *std::max_element(logits.begin(), logits.end());
+    double sum = 0.0;
+
+    for (size_t i = 0; i < logits.size(); ++i) {
+        probabilities[i] = std::exp(logits[i] - max_logit);
+        sum += probabilities[i];
+    }
+
+    if (sum <= 0.0) return probabilities;
+
+    for (double& probability : probabilities) {
+        probability /= sum;
+    }
+
+    return probabilities;
+}
+
 // ReLU activation function and its derivative
 inline double relu(double x) {
     return std::max(0.0, x);
@@ -30,10 +54,6 @@ inline double relu(double x) {
 inline double relu_derivative(double x) {
     return x > 0 ? 1.0 : 0.0;
 }
-
-// Matrix operations
-using Matrix = std::vector<std::vector<double>>;
-using Vector = std::vector<double>;
 
 Matrix matrix_multiply(const Matrix& A, const Matrix& B) {
     size_t m = A.size();
@@ -102,6 +122,22 @@ double binary_cross_entropy(const Vector& y_true, const Vector& y_pred) {
         loss -= y_true[i] * std::log(yp) + (1.0 - y_true[i]) * std::log(1.0 - yp);
     }
     return loss / y_true.size();
+}
+
+double multiclass_cross_entropy(const Vector& y_true, const Matrix& y_pred) {
+    double eps = 1e-15;
+    double loss = 0.0;
+
+    for (size_t i = 0; i < y_true.size(); ++i) {
+        int label = static_cast<int>(y_true[i]);
+        double probability = eps;
+        if (i < y_pred.size() && label >= 0 && static_cast<size_t>(label) < y_pred[i].size()) {
+            probability = std::max(eps, std::min(1.0 - eps, y_pred[i][label]));
+        }
+        loss -= std::log(probability);
+    }
+
+    return y_true.empty() ? 0.0 : loss / y_true.size();
 }
 
 } // namespace nn

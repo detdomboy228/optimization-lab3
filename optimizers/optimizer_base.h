@@ -23,6 +23,13 @@ public:
     
     virtual void step(std::vector<std::vector<double>>& weights,
                       std::vector<std::vector<double>>& gradients) = 0;
+
+    virtual void step(std::vector<double>& values,
+                      std::vector<double>& gradients) {
+        for (size_t i = 0; i < values.size(); ++i) {
+            values[i] -= learning_rate * gradients[i];
+        }
+    }
     
     virtual void set_learning_rate(double lr) {
         learning_rate = lr;

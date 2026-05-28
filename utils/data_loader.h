@@ -7,6 +7,7 @@
 #include <random>
 #include <algorithm>
 #include <cmath>
+#include <map>
 
 struct Dataset {
     std::vector<std::vector<double>> X;  // Features
@@ -65,6 +66,26 @@ public:
         
         return data;
     }
+
+    static std::vector<double> unique_labels(const Dataset& data) {
+        std::vector<double> labels = data.y;
+        std::sort(labels.begin(), labels.end());
+        labels.erase(std::unique(labels.begin(), labels.end()), labels.end());
+        return labels;
+    }
+
+    static void relabel_to_zero_based(Dataset& data) {
+        std::vector<double> labels = unique_labels(data);
+        std::map<double, int> label_to_index;
+
+        for (size_t i = 0; i < labels.size(); ++i) {
+            label_to_index[labels[i]] = static_cast<int>(i);
+        }
+
+        for (double& label : data.y) {
+            label = label_to_index[label];
+        }
+    }
     
     // Split dataset into train and test sets
     static std::pair<Dataset, Dataset> train_test_split(const Dataset& data, 
@@ -101,6 +122,38 @@ public:
         train_data.n_samples = train_data.X.size();
         test_data.n_samples = test_data.X.size();
         
+        return {train_data, test_data};
+    }
+
+    static std::pair<Dataset, Dataset> stratified_train_test_split(const Dataset& data,
+                                                                    double test_ratio = 0.2,
+                                                                    unsigned int seed = 42) {
+        std::mt19937 rng(seed);
+        std::map<int, std::vector<size_t>> indices_by_class;
+
+        for (size_t i = 0; i < data.n_samples; ++i) {
+            indices_by_class[static_cast<int>(data.y[i])].push_back(i);
+        }
+
+        Dataset train_data, test_data;
+        train_data.n_features = data.n_features;
+        test_data.n_features = data.n_features;
+
+        for (auto& [label, indices] : indices_by_class) {
+            std::shuffle(indices.begin(), indices.end(), rng);
+            size_t test_size = static_cast<size_t>(std::round(indices.size() * test_ratio));
+
+            for (size_t i = 0; i < indices.size(); ++i) {
+                size_t idx = indices[i];
+                Dataset& target = (i < test_size) ? test_data : train_data;
+                target.X.push_back(data.X[idx]);
+                target.y.push_back(data.y[idx]);
+            }
+        }
+
+        train_data.n_samples = train_data.X.size();
+        test_data.n_samples = test_data.X.size();
+
         return {train_data, test_data};
     }
     

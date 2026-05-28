@@ -100,11 +100,9 @@ public:
                     }
                 }
             } else {
-                // Output layer: Sigmoid for binary classification
+                // Output layer: softmax for multiclass classification
                 for (auto& row : A) {
-                    for (auto& val : row) {
-                        val = sigmoid(val);
-                    }
+                    row = softmax(row);
                 }
             }
             activations.push_back(A);
@@ -152,11 +150,9 @@ public:
                     }
                 }
             } else {
-                // Sigmoid for output
+                // Softmax for output
                 for (auto& row : A) {
-                    for (size_t j = 0; j < row.size(); ++j) {
-                        row[j] = sigmoid(row[j]);
-                    }
+                    row = softmax(row);
                 }
             }
             activations.push_back(A);
@@ -166,10 +162,14 @@ public:
         std::vector<std::vector<std::vector<double>>> dW(num_layers);
         std::vector<std::vector<double>> db(num_layers);
         
-        // Output layer gradient (binary cross-entropy derivative)
+        // Output layer gradient (softmax + multiclass cross-entropy derivative)
         std::vector<std::vector<double>> delta(batch_size, std::vector<double>(architecture.back()));
         for (size_t b_idx = 0; b_idx < batch_size; ++b_idx) {
-            delta[b_idx][0] = activations.back()[b_idx][0] - y[b_idx];
+            int label = static_cast<int>(y[b_idx]);
+            for (size_t j = 0; j < architecture.back(); ++j) {
+                double target = (label >= 0 && static_cast<size_t>(label) == j) ? 1.0 : 0.0;
+                delta[b_idx][j] = activations.back()[b_idx][j] - target;
+            }
         }
         
         for (int l = num_layers - 1; l >= 0; --l) {
@@ -231,36 +231,35 @@ public:
             optimizer.step(weights[l], dW[l]);
         }
         
-        // Update biases directly using gradient descent
+        // Update biases with the same optimizer as weights
         for (size_t l = 0; l < biases.size(); ++l) {
-            for (size_t i = 0; i < biases[l].size(); ++i) {
-                biases[l][i] -= optimizer.get_learning_rate() * db[l][i];
-            }
+            optimizer.step(biases[l], db[l]);
         }
         
         // Compute loss
-        std::vector<double> predictions;
+        std::vector<std::vector<double>> predictions;
         for (const auto& x : X) {
-            predictions.push_back(forward(x)[0]);
+            predictions.push_back(forward(x));
         }
-        return binary_cross_entropy(y, predictions);
+        return multiclass_cross_entropy(y, predictions);
     }
     
     // Predict class probabilities
-    std::vector<double> predict_proba(const std::vector<std::vector<double>>& X) {
-        std::vector<double> probs;
+    std::vector<std::vector<double>> predict_proba(const std::vector<std::vector<double>>& X) {
+        std::vector<std::vector<double>> probs;
         for (const auto& x : X) {
-            probs.push_back(forward(x)[0]);
+            probs.push_back(forward(x));
         }
         return probs;
     }
     
     // Predict classes
-    std::vector<int> predict(const std::vector<std::vector<double>>& X, double threshold = 0.5) {
-        std::vector<double> probs = predict_proba(X);
+    std::vector<int> predict(const std::vector<std::vector<double>>& X) {
+        std::vector<std::vector<double>> probs = predict_proba(X);
         std::vector<int> classes;
-        for (double p : probs) {
-            classes.push_back(p >= threshold ? 1 : 0);
+        for (const auto& row : probs) {
+            auto best = std::max_element(row.begin(), row.end());
+            classes.push_back(static_cast<int>(std::distance(row.begin(), best)));
         }
         return classes;
     }
